@@ -320,12 +320,12 @@ def gen_dimensions():
     return gc_t1, gg_t1, gc_t2, gg_t2
 
 
-def gen_time_periods(start_date, count):
-    periods = [[start_date, start_date + datetime.timedelta(days=30)]]
+def gen_time_periods(start_date, count, span):
+    periods = [[start_date, start_date + datetime.timedelta(days=span)]]
 
     for i in range(count):
         next_start = periods[i][1] + datetime.timedelta(days=1)
-        next_end = next_start + datetime.timedelta(days=30)
+        next_end = next_start + datetime.timedelta(days=span)
         periods.append([next_start, next_end])
 
     return periods
@@ -347,7 +347,7 @@ if __name__ == '__main__':
     coll_dict = {g: [] for g in g_t1}
     prev_coll = {}
 
-    time_periods = gen_time_periods(t1_start_date, 9)
+    time_periods = gen_time_periods(t1_start_date, 9, 30)
 
     for period in time_periods:
         gen_leased_gear(fake, lg_ids, 100000, g_t1, c_t1, period[0], period[1], coll_dict, prev_coll, 'T1')
@@ -357,7 +357,7 @@ if __name__ == '__main__':
         coll_dict = {}
 
     print("T1 finished")
-    time_periods = gen_time_periods(time_periods[9][1] + datetime.timedelta(days=1), 1)
+    time_periods = gen_time_periods(time_periods[9][1] + datetime.timedelta(days=1), 1, 30)
 
     for period in time_periods:
         gen_leased_gear(fake, lg_ids, 50000, g_t1, c_t1, period[0], period[1], coll_dict, prev_coll, 'T2')
