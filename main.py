@@ -1,4 +1,3 @@
-import bisect
 import random
 import csv
 import faker
@@ -96,10 +95,9 @@ def export_to_csv(file_name, header, data):
         writer.writerows(data)
 
 
-def save_to_csv(file_name, header, data):
+def save_to_csv(file_name, data):
     with open(file_name, mode='a', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(header)
         writer.writerows(data)
 
 
@@ -114,19 +112,12 @@ def gen_uniq_id(fake_gen, ids: list):
 
 
 def check_for_date_conflict(start_date, end_date, gear_id, g_dict) -> bool:
-    length = len(g_dict[gear_id])
-    date_ranges = g_dict[gear_id]
-    start_dates = [dates[0] for dates in date_ranges]
-    idx = bisect.bisect_left(start_dates, start_date)
-    if idx > 0:
-        idx = idx - 1
-
-    for j in  range(idx, length):
-        dates = date_ranges[j]
-        if end_date < dates[0]:
-            break
-        if not (dates[0] > end_date or dates[1] < start_date):
-            return True
+    if gear_id in g_dict:
+        for dates in g_dict[gear_id]:
+            if end_date < dates[0]:
+                break
+            if not (dates[0] > end_date or dates[1] < start_date):
+                return True
 
     return False
 
@@ -176,18 +167,17 @@ def gen_gear(fake_gen, uids: list, n: int, centers: [SkiCenter], ids: list):
 
 def save_leased_gear(l_list: [LeasedGear], suffix: str):
     save_to_csv('leasedGear' + suffix + '.csv',
-                ['id', 'gear_id', 'client_id', 'lease_date', 'planned_date', 'return_date'],
                 [[g.id, g.gear_id, g.client_id, g.lease_date, g.planned_date, g.return_date] for g in l_list])
 
 
 def save_service(service_list: [Service], suffix: str):
-    save_to_csv('service' + suffix + '.csv', ['id', 'gear_id', 'service_date', 'planned_date', 'return_date'],
+    save_to_csv('service' + suffix + '.csv',
                 [[service.id, service.gear_id, service.start_date, service.planned_date, service.return_date]
                  for service in service_list])
 
 
 def gen_leased_gear(fake_gen, ids: list, n: int, g_list: list, c_list: list,
-                    start_date, end_date, g_dict, suffix: str):
+                    start_date, end_date, g_dict, p_dict, suffix: str):
     lease_list = []
     client_count, gear_count = len(c_list), len(g_list)
     client_ids, gear_ids = list(range(client_count)), list(range(gear_count))
@@ -208,14 +198,16 @@ def gen_leased_gear(fake_gen, ids: list, n: int, g_list: list, c_list: list,
             planned_date = lease_date + datetime.timedelta(days=random.randint(0, 4))
             ret_date = planned_date + datetime.timedelta(days=random.randint(0, 3))
             conflict = check_for_date_conflict(lease_date, ret_date, g_id, g_dict)
+            if not conflict:
+                conflict = check_for_date_conflict(lease_date, ret_date, g_id, p_dict)
 
-        bisect.insort(g_dict[g_id], (lease_date, ret_date))
+        g_dict[g_id].append([lease_date, ret_date])
         lease_list.append(LeasedGear(gen_uniq_id(fake_gen, ids), g_id, random.choice(c_list), lease_date,
                                      planned_date, ret_date))
     save_leased_gear(lease_list, suffix)
 
 
-def gen_services(fake_gen, ids: list, n: int, g_list: list, start_date, end_date, g_dict, suffix: str):
+def gen_services(fake_gen, ids: list, n: int, g_list: list, start_date, end_date, g_dict, p_dict, suffix: str):
     service_list = []
     for a in range(n):
         g_id = None
@@ -231,12 +223,13 @@ def gen_services(fake_gen, ids: list, n: int, g_list: list, start_date, end_date
         while conflict:
             g_id = g_list[random.randint(0, len(g_list) - 1)]
             service_date = fake_gen.date_between(start_date=start_date, end_date=end_date)
-            planned_date = service_date + datetime.timedelta(days=random.randint(0, 10))
+            planned_date = service_date + datetime.timedelta(days=random.randint(0, 7))
             return_date = planned_date + datetime.timedelta(days=random.randint(0, 5))
-
             conflict = check_for_date_conflict(service_date, return_date, g_id, g_dict)
+            if not conflict:
+                conflict = check_for_date_conflict(service_date, return_date, g_id, p_dict)
 
-        bisect.insort(g_dict[g_id], (service_date, return_date))
+        g_dict[g_id].append([service_date, return_date])
         service_list.append(Service(gen_uniq_id(fake_gen, ids), g_id, service_date, planned_date,
                                     return_date))
     save_service(service_list, suffix)
@@ -285,43 +278,33 @@ def get_unique_sample(src: list, result: list, ids: list, sample_size: int):
     return chosen_samples
 
 
-if __name__ == '__main__':
-    fake = faker.Faker("pl_PL")
-    t1_start_date = datetime.datetime(2023, 1, 1)
-    t1_end_date = datetime.datetime(2023, 12, 31)
-    t2_start_date = datetime.datetime(2024, 1, 1)
-    t2_end_date = datetime.datetime(2024, 12, 31)
-
-    g_ids, c_ids, lg_ids, ski_ids, serv_ids = [], [], [], [], []
+def gen_dimensions():
+    g_ids, c_ids, ski_ids = [], [], []
     # ^ lists of used ids for gear, clients, leases, ski centers, services ^
-    c_t1, g_t1, c_t2, g_t2 = [], [], [], []
+    gc_t1, gg_t1, gc_t2, gg_t2 = [], [], [], []
 
-#   Set T1
-    clients = gen_clients(fake, c_ids, c_t1, 50000)
+    #   Set T1
+    clients = gen_clients(fake, c_ids, gc_t1, 50000)
     print("clients t1 generated")
-    clients_t2 = gen_clients(fake, c_ids, c_t2, 20000)
+    clients_t2 = gen_clients(fake, c_ids, gc_t2, 2000)
     print("clients t2 generated")
-    old_clients = get_unique_sample(clients, clients_t2, c_t2, 30000)
+    old_clients = get_unique_sample(clients, clients_t2, gc_t2, 3000)
     print("clients t1 moved to clients t2")
     for c in old_clients:
         c.last_name = fake.last_name()
     export_clients(clients, 'T1')
     export_clients(clients_t2, 'T2')
-    clients, clients_t2, old_clients, c_ids = [], [], [], []
 
     ski_centers = gen_ski_centers(fake, ski_ids, 1000)
     print("centers t1 generated")
 
-    gear, gear_excel = gen_gear(fake, g_ids, 100000, ski_centers, g_t1)
-    coll_dict = {g: [] for g in g_t1}
+    gear, gear_excel = gen_gear(fake, g_ids, 100000, ski_centers, gg_t1)
     print("gear t1 generated")
-    gear_t2, gear_excel_t2 = gen_gear(fake, g_ids, 50000, ski_centers, g_t2)
-    for g in gear_t2:
-        coll_dict[g.id] = []
+    gear_t2, gear_excel_t2 = gen_gear(fake, g_ids, 5000, ski_centers, gg_t2)
     print("gear t2 generated")
-    get_unique_sample(gear, gear_t2, g_t2, 50000)
+    get_unique_sample(gear, gear_t2, gg_t2, 5000)
     print("gear t1 moved to gear t2")
-    for i in range(len(gear)):
+    for i in range(4998, len(gear)):
         if gear[i] in gear_t2:
             gear_excel_t2.append(gear_excel[i])
     print("gear excel t1 moved to gear excel t2")
@@ -330,20 +313,54 @@ if __name__ == '__main__':
     export_gear(gear, gear_excel, 'T1')
     export_gear(gear_t2, gear_excel_t2, 'T2')
     print("dimension exports done")
-    gear, gear_t2, gear_excel, gear_excel_t2, ski_centers, g_ids, ski_ids = [], [], [], [], [], [], []
+    return gc_t1, gg_t1, gc_t2, gg_t2
 
-    gen_leased_gear(fake, lg_ids, 1000000, g_t1, c_t1, t1_start_date, t1_end_date, coll_dict, 'T1')
-    print("lease facts t1 generated")
 
-    gen_services(fake, serv_ids, 1000000, g_t1, t1_start_date, t1_end_date, coll_dict, 'T1')
-    print("service facts t1 generated")
+def gen_time_periods(start_date, count):
+    periods = [[start_date, start_date + datetime.timedelta(days=30)]]
 
-# Set T2
-    gen_leased_gear(fake, lg_ids, 100000, g_t2, c_t2, t2_start_date, t2_end_date, coll_dict, 'T2')
-    print("lease facts t2 generated")
+    for i in range(count):
+        next_start = periods[i][1] + datetime.timedelta(days=1)
+        next_end = next_start + datetime.timedelta(days=30)
+        periods.append([next_start, next_end])
 
-    gen_services(fake, serv_ids, 100000, g_t2, t2_start_date, t2_end_date, coll_dict, 'T2')
-    print("service facts t2 generated")
+    return periods
+
+
+if __name__ == '__main__':
+    fake = faker.Faker("pl_PL")
+    export_leased_gear([], 'T1')
+    export_services([], 'T1')
+    export_leased_gear([], 'T2')
+    export_services([], 'T2')
+    t1_start_date = datetime.datetime(2023, 1, 1)
+    t1_end_date = datetime.datetime(2023, 12, 31)
+    t2_start_date = datetime.datetime(2024, 1, 1)
+    t2_end_date = datetime.datetime(2024, 12, 31)
+    lg_ids, serv_ids = [], []
+
+    c_t1, g_t1, c_t2, g_t2 = gen_dimensions()
+    coll_dict = {g: [] for g in g_t1}
+    prev_coll = {}
+
+    time_periods = gen_time_periods(t1_start_date, 9)
+
+    for period in time_periods:
+        gen_leased_gear(fake, lg_ids, 100000, g_t1, c_t1, period[0], period[1], coll_dict, prev_coll, 'T1')
+        gen_services(fake, serv_ids, 100000, g_t1, period[0], period[1], coll_dict, prev_coll, 'T1')
+        print("one loop finished")
+        prev_coll = coll_dict
+        coll_dict = {}
+
+    print("T1 finished")
+    time_periods = gen_time_periods(time_periods[9][1] + datetime.timedelta(days=1), 1)
+
+    for period in time_periods:
+        gen_leased_gear(fake, lg_ids, 100000, g_t1, c_t1, period[0], period[1], coll_dict, prev_coll, 'T2')
+        gen_services(fake, serv_ids, 100000, g_t1, period[0], period[1], coll_dict, prev_coll, 'T2')
+        print("one loop finished")
+        prev_coll = coll_dict
+        coll_dict = {}
 
 with open('clientsT1.csv', 'rb') as f:
     print(chardet.detect(f.read()))
