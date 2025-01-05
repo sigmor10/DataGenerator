@@ -200,8 +200,10 @@ def gen_leased_gear(fake_gen, ids: list, n: int, g_list: list, c_list: list,
             conflict = check_for_date_conflict(lease_date, ret_date, g_id, g_dict)
             if not conflict:
                 conflict = check_for_date_conflict(lease_date, ret_date, g_id, p_dict)
-
-        g_dict[g_id].append([lease_date, ret_date])
+        if g_id in g_dict:
+            g_dict[g_id].append([lease_date, ret_date])
+        else:
+            g_dict[g_id] = [[lease_date, ret_date]]
         lease_list.append(LeasedGear(gen_uniq_id(fake_gen, ids), g_id, random.choice(c_list), lease_date,
                                      planned_date, ret_date))
     save_leased_gear(lease_list, suffix)
@@ -228,8 +230,10 @@ def gen_services(fake_gen, ids: list, n: int, g_list: list, start_date, end_date
             conflict = check_for_date_conflict(service_date, return_date, g_id, g_dict)
             if not conflict:
                 conflict = check_for_date_conflict(service_date, return_date, g_id, p_dict)
-
-        g_dict[g_id].append([service_date, return_date])
+        if g_id in g_dict:
+            g_dict[g_id].append([service_date, return_date])
+        else:
+            g_dict[g_id] = [[service_date, return_date]]
         service_list.append(Service(gen_uniq_id(fake_gen, ids), g_id, service_date, planned_date,
                                     return_date))
     save_service(service_list, suffix)
