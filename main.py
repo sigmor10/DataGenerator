@@ -96,6 +96,13 @@ def export_to_csv(file_name, header, data):
         writer.writerows(data)
 
 
+def save_to_csv(file_name, header, data):
+    with open(file_name, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(header)
+        writer.writerows(data)
+
+
 def gen_uniq_id(fake_gen, ids: list):
     u_id = None
 
@@ -120,8 +127,6 @@ def check_for_date_conflict(start_date, end_date, gear_id, g_dict) -> bool:
             break
         if not (dates[0] > end_date or dates[1] < start_date):
             return True
-
-    bisect.insort(g_dict[gear_id], (start_date, end_date))
 
     return False
 
@@ -169,52 +174,72 @@ def gen_gear(fake_gen, uids: list, n: int, centers: [SkiCenter], ids: list):
     return gear_list, gear_ex_list
 
 
+def save_leased_gear(l_list: [LeasedGear], suffix: str):
+    save_to_csv('leasedGear' + suffix + '.csv',
+                ['id', 'gear_id', 'client_id', 'lease_date', 'planned_date', 'return_date'],
+                [[g.id, g.gear_id, g.client_id, g.lease_date, g.planned_date, g.return_date] for g in l_list])
+
+
+def save_service(service_list: [Service], suffix: str):
+    save_to_csv('service' + suffix + '.csv', ['id', 'gear_id', 'service_date', 'planned_date', 'return_date'],
+                [[service.id, service.gear_id, service.start_date, service.planned_date, service.return_date]
+                 for service in service_list])
+
+
 def gen_leased_gear(fake_gen, ids: list, n: int, g_list: list, c_list: list,
-                    start_date, end_date, g_dict) -> [LeasedGear]:
+                    start_date, end_date, g_dict, suffix: str):
     lease_list = []
     client_count, gear_count = len(c_list), len(g_list)
     client_ids, gear_ids = list(range(client_count)), list(range(gear_count))
     for a in range(n):
-        g_idx = None
+        g_id = None
         conflict = True
         lease_date, planned_date, ret_date = None, None, None
 
         if a % 10000 == 0:
-            print("another 1000, currently: " + str(a))
+            print("another 10000, currently: " + str(a))
+        if len(lease_list) == 100000:
+            save_leased_gear(lease_list, suffix)
+            lease_list = []
 
         while conflict:
-            g_idx = gen_random_idx(gear_ids, gear_count - 1)
+            g_id = g_list[gen_random_idx(gear_ids, gear_count - 1)]
             lease_date = fake_gen.date_between(start_date=start_date, end_date=end_date)
-            planned_date = lease_date + datetime.timedelta(days=random.randint(0, 7))
+            planned_date = lease_date + datetime.timedelta(days=random.randint(0, 4))
             ret_date = planned_date + datetime.timedelta(days=random.randint(0, 3))
-            conflict = check_for_date_conflict(lease_date, ret_date, g_list[g_idx], g_dict)
+            conflict = check_for_date_conflict(lease_date, ret_date, g_id, g_dict)
 
-        lease_list.append(LeasedGear(gen_uniq_id(fake_gen, ids), g_list[g_idx], random.choice(c_list), lease_date,
+        bisect.insort(g_dict[g_id], (lease_date, ret_date))
+        lease_list.append(LeasedGear(gen_uniq_id(fake_gen, ids), g_id, random.choice(c_list), lease_date,
                                      planned_date, ret_date))
-    return lease_list
+    save_leased_gear(lease_list, suffix)
 
 
-def gen_services(fake_gen, ids: list, n: int, g_list: list, start_date, end_date, g_dict) -> [Service]:
+def gen_services(fake_gen, ids: list, n: int, g_list: list, start_date, end_date, g_dict, suffix: str):
     service_list = []
     for a in range(n):
-        g_idx = None
+        g_id = None
         conflict = True
         service_date, planned_date, return_date = None, None, None
 
         if a % 10000 == 0:
             print("another 1000, currently: " + str(a))
+        if len(service_list) == 100000:
+            save_leased_gear(service_list, suffix)
+            service_list = []
 
         while conflict:
-            g_idx = random.randint(0, len(g_list) - 1)
+            g_id = g_list[random.randint(0, len(g_list) - 1)]
             service_date = fake_gen.date_between(start_date=start_date, end_date=end_date)
-            planned_date = service_date + datetime.timedelta(days=random.randint(0, 15))
+            planned_date = service_date + datetime.timedelta(days=random.randint(0, 10))
             return_date = planned_date + datetime.timedelta(days=random.randint(0, 5))
 
-            conflict = check_for_date_conflict(service_date, return_date, g_list[g_idx], g_dict)
+            conflict = check_for_date_conflict(service_date, return_date, g_id, g_dict)
 
-        service_list.append(Service(gen_uniq_id(fake_gen, ids), g_list[g_idx], service_date, planned_date,
+        bisect.insort(g_dict[g_id], (service_date, return_date))
+        service_list.append(Service(gen_uniq_id(fake_gen, ids), g_id, service_date, planned_date,
                                     return_date))
-    return service_list
+    save_service(service_list, suffix)
 
 
 def export_services(service_list: [Service], suffix: str):
@@ -307,24 +332,18 @@ if __name__ == '__main__':
     print("dimension exports done")
     gear, gear_t2, gear_excel, gear_excel_t2, ski_centers, g_ids, ski_ids = [], [], [], [], [], [], []
 
-    leased_gear = gen_leased_gear(fake, lg_ids, 1000000, g_t1, c_t1, t1_start_date, t1_end_date, coll_dict)
+    gen_leased_gear(fake, lg_ids, 1000000, g_t1, c_t1, t1_start_date, t1_end_date, coll_dict, 'T1')
     print("lease facts t1 generated")
-    export_leased_gear(leased_gear, 'T1')
-    leased_gear.clear()
 
-    services = gen_services(fake, serv_ids, 1000000, g_t1, t1_start_date, t1_end_date, coll_dict)
+    gen_services(fake, serv_ids, 1000000, g_t1, t1_start_date, t1_end_date, coll_dict, 'T1')
     print("service facts t1 generated")
-    export_services(services, 'T1')
-    services.clear()
 
 # Set T2
-    leased_gear_t2 = gen_leased_gear(fake, lg_ids, 100000, g_t2, c_t2, t2_start_date, t2_end_date, coll_dict)
+    gen_leased_gear(fake, lg_ids, 100000, g_t2, c_t2, t2_start_date, t2_end_date, coll_dict, 'T2')
     print("lease facts t2 generated")
-    export_leased_gear(leased_gear_t2, 'T2')
 
-    services_t2 = gen_services(fake, serv_ids, 100000, g_t2, t2_start_date, t2_end_date, coll_dict)
+    gen_services(fake, serv_ids, 100000, g_t2, t2_start_date, t2_end_date, coll_dict, 'T2')
     print("service facts t2 generated")
-    export_services(services_t2, 'T2')
 
 with open('clientsT1.csv', 'rb') as f:
     print(chardet.detect(f.read()))
