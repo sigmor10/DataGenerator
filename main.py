@@ -226,7 +226,7 @@ def gen_services(fake_gen, ids: list, n: int, g_list: list, start_date, end_date
             g_id = g_list[random.randint(0, len(g_list) - 1)]
             service_date = fake_gen.date_between(start_date=start_date, end_date=end_date)
             planned_date = service_date + datetime.timedelta(days=random.randint(0, 7))
-            return_date = planned_date + datetime.timedelta(days=random.randint(0, 5))
+            return_date = planned_date + datetime.timedelta(days=random.randint(0, 3))
             conflict = check_for_date_conflict(service_date, return_date, g_id, g_dict)
             if not conflict:
                 conflict = check_for_date_conflict(service_date, return_date, g_id, p_dict)
@@ -360,8 +360,8 @@ if __name__ == '__main__':
     time_periods = gen_time_periods(time_periods[9][1] + datetime.timedelta(days=1), 1)
 
     for period in time_periods:
-        gen_leased_gear(fake, lg_ids, 100000, g_t1, c_t1, period[0], period[1], coll_dict, prev_coll, 'T2')
-        gen_services(fake, serv_ids, 100000, g_t1, period[0], period[1], coll_dict, prev_coll, 'T2')
+        gen_leased_gear(fake, lg_ids, 50000, g_t1, c_t1, period[0], period[1], coll_dict, prev_coll, 'T2')
+        gen_services(fake, serv_ids, 50000, g_t1, period[0], period[1], coll_dict, prev_coll, 'T2')
         print("one loop finished")
         prev_coll = coll_dict
         coll_dict = {}
