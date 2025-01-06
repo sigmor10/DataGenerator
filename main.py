@@ -6,7 +6,6 @@ from multiprocessing import Manager
 
 import faker
 import datetime
-import chardet
 
 
 class SkiCenter:
@@ -328,8 +327,8 @@ def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sampl
         g_ids, c_ids = manager.list(), manager.list()
         mc_t1, mg_t1, mc_t2, mg_t2 = manager.list(), manager.list(), manager.list(), manager.list()
         with ProcessPoolExecutor() as executor:
-            p1 = executor.submit(gen_id_set, g_ids, g_count1 + g_count2)
-            p2 = executor.submit(gen_id_set, c_ids, c_count1 + c_count2)
+            p1 = executor.submit(gen_fact_ids, g_ids, g_count1 + g_count2)
+            p2 = executor.submit(gen_fact_ids, c_ids, c_count1 + c_count2)
 
             p1.result()
             p2.result()
@@ -403,6 +402,12 @@ def parallel_facts_gen(l_ids, s_ids, start_idx, c_per_p, gear, clients, period, 
         save_service(s_results, suffix)
 
 
+def gen_fact_ids(ids, count):
+    tmp = list(range(1, count + 1))
+    random.shuffle(tmp)
+    ids.extend(tmp)
+
+
 def gen_facts(period1: list, period2: list, c_per_p1: int, c_per_p2: int,
               gear_t1, gear_t2, clients_t1, clients_t2):
 
@@ -417,25 +422,72 @@ def gen_facts(period1: list, period2: list, c_per_p1: int, c_per_p2: int,
 
     with Manager() as manager:
         dicts = [manager.dict() for _ in range(period1_count + 2)]
+        dicts2 = [manager.dict() for _ in range(period2_count + 2)]
         l_ids, s_ids = manager.list(), manager.list()
 
         with ProcessPoolExecutor() as executor:
-            future1 = executor.submit(gen_id_set, l_ids, fact_count1 + fact_count2)
-            future2 = executor.submit(gen_id_set, s_ids, fact_count1 + fact_count2)
+            future1 = executor.submit(gen_fact_ids, l_ids, fact_count1 + fact_count2)
+            future2 = executor.submit(gen_fact_ids, s_ids, fact_count1 + fact_count2)
 
             future1.result()
             future2.result()
             print("Fact id generated")
+            l_results, s_results = [], []
 
-        parallel_facts_gen(l_ids, s_ids, 0, c_per_p1, gear_t1, clients_t1, period1, dicts, even_idx, 'T1')
-        print("T1 around half finished")
-        parallel_facts_gen(l_ids, s_ids, 0, c_per_p1, gear_t1, clients_t1, period1, dicts, odd_idx, 'T1')
-        print("T1 finished")
+            for x in even_idx:
+                l_results.append(executor.submit(gen_leased_gear, l_ids, c_per_p1 * x, c_per_p1, gear_t1, clients_t1,
+                                                 period1[x][0], period1[x][1], dicts[x],
+                                                 dicts[x + 1], dicts[x + 2]))
+            for result in l_results:
+                save_leased_gear(result, 'T1')
+            for x in even_idx:
+                s_results.append(executor.submit(gen_services, s_ids, c_per_p1 * x, c_per_p1, gear_t1, period1[x][0],
+                                                 period1[x][1], dicts[x], dicts[x + 1], dicts[x + 2]))
+            for result in s_results:
+                save_service(result, 'T1')
+            l_results, s_results = [], []
+            print("T1 around half finished")
 
-        parallel_facts_gen(l_ids, s_ids, fact_count1, c_per_p2, gear_t2, clients_t2, period2, dicts, even_idx2, 'T2')
-        print("T2 around half finished")
-        parallel_facts_gen(l_ids, s_ids, fact_count1, c_per_p2, gear_t2, clients_t2, period2, dicts, odd_idx2, 'T2')
-        print("T2 finished")
+            for x in odd_idx:
+                l_results.append(executor.submit(gen_leased_gear, l_ids, c_per_p1 * x, c_per_p1, gear_t1, clients_t1,
+                                                 period1[x][0], period1[x][1], dicts[x],
+                                                 dicts[x + 1], dicts[x + 2]))
+            for result in l_results:
+                save_leased_gear(result, 'T1')
+            for x in odd_idx:
+                s_results.append(executor.submit(gen_services, s_ids, c_per_p1 * x, c_per_p1, gear_t1, period1[x][0],
+                                                 period1[x][1], dicts[x], dicts[x + 1], dicts[x + 2]))
+            for result in s_results:
+                save_service(result, 'T1')
+            l_results, s_results = [], []
+            print("T1 finished")
+
+            for x in even_idx2:
+                l_results.append(executor.submit(gen_leased_gear, l_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
+                                                 clients_t2, period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1],
+                                                 dicts2[x + 2]))
+            for result in l_results:
+                save_leased_gear(result, 'T2')
+            for x in even_idx2:
+                s_results.append(executor.submit(gen_services, s_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
+                                                 period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1], dicts2[x + 2]))
+            for result in s_results:
+                save_service(result, 'T2')
+            l_results, s_results = [], []
+            print("T2 around half finished")
+
+            for x in odd_idx2:
+                l_results.append(executor.submit(gen_leased_gear, l_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
+                                                 clients_t2, period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1],
+                                                 dicts2[x + 2]))
+            for result in l_results:
+                save_leased_gear(result, 'T2')
+            for x in odd_idx2:
+                s_results.append(executor.submit(gen_services, s_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
+                                                 period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1], dicts2[x + 2]))
+            for result in s_results:
+                save_service(result, 'T2')
+            print("T2 finished")
 
 
 if __name__ == '__main__':
@@ -451,6 +503,3 @@ if __name__ == '__main__':
     c_t1, g_t1, c_t2, g_t2 = gen_dimensions(50000, 5000, 100000, 10000, 1000, 2000, 5000)
 
     gen_facts(time_periods, time_periods2, 100000, 10000, g_t1, g_t2, c_t1, c_t2)
-
-with open('clientsT1.csv', 'rb') as f:
-    print(chardet.detect(f.read()))
