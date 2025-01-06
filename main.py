@@ -439,12 +439,12 @@ def gen_facts(period1: list, period2: list, c_per_p1: int, c_per_p2: int,
                                                  period1[x][0], period1[x][1], dicts[x],
                                                  dicts[x + 1], dicts[x + 2]))
             for result in l_results:
-                save_leased_gear(result, 'T1')
+                save_leased_gear(result.result(), 'T1')
             for x in even_idx:
                 s_results.append(executor.submit(gen_services, s_ids, c_per_p1 * x, c_per_p1, gear_t1, period1[x][0],
                                                  period1[x][1], dicts[x], dicts[x + 1], dicts[x + 2]))
             for result in s_results:
-                save_service(result, 'T1')
+                save_service(result.result(), 'T1')
             l_results, s_results = [], []
             print("T1 around half finished")
 
@@ -453,12 +453,12 @@ def gen_facts(period1: list, period2: list, c_per_p1: int, c_per_p2: int,
                                                  period1[x][0], period1[x][1], dicts[x],
                                                  dicts[x + 1], dicts[x + 2]))
             for result in l_results:
-                save_leased_gear(result, 'T1')
+                save_leased_gear(result.result(), 'T1')
             for x in odd_idx:
                 s_results.append(executor.submit(gen_services, s_ids, c_per_p1 * x, c_per_p1, gear_t1, period1[x][0],
                                                  period1[x][1], dicts[x], dicts[x + 1], dicts[x + 2]))
             for result in s_results:
-                save_service(result, 'T1')
+                save_service(result.result(), 'T1')
             l_results, s_results = [], []
             print("T1 finished")
 
@@ -467,12 +467,12 @@ def gen_facts(period1: list, period2: list, c_per_p1: int, c_per_p2: int,
                                                  clients_t2, period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1],
                                                  dicts2[x + 2]))
             for result in l_results:
-                save_leased_gear(result, 'T2')
+                save_leased_gear(result.result(), 'T2')
             for x in even_idx2:
                 s_results.append(executor.submit(gen_services, s_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
                                                  period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1], dicts2[x + 2]))
             for result in s_results:
-                save_service(result, 'T2')
+                save_service(result.result(), 'T2')
             l_results, s_results = [], []
             print("T2 around half finished")
 
@@ -481,12 +481,12 @@ def gen_facts(period1: list, period2: list, c_per_p1: int, c_per_p2: int,
                                                  clients_t2, period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1],
                                                  dicts2[x + 2]))
             for result in l_results:
-                save_leased_gear(result, 'T2')
+                save_leased_gear(result.result(), 'T2')
             for x in odd_idx2:
                 s_results.append(executor.submit(gen_services, s_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
                                                  period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1], dicts2[x + 2]))
             for result in s_results:
-                save_service(result, 'T2')
+                save_service(result.result(), 'T2')
             print("T2 finished")
 
 
