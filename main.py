@@ -6,6 +6,7 @@ from multiprocessing import Manager
 
 import faker
 import datetime
+import config
 
 
 class SkiCenter:
@@ -114,7 +115,7 @@ def gen_uniq_id(ids: list):
     u_id = None
 
     while u_id is None or u_id in ids:
-        u_id = gen_id(9)
+        u_id = gen_id(config.id_length)
 
     ids.append(u_id)
     return u_id
@@ -195,9 +196,6 @@ def gen_leased_gear(ids: list, idx: int, n: int, g_list: list, c_list: list,
         conflict = True
         lease_date, planned_date, ret_date = None, None, None
 
-        if a % 10000 == 0:
-            print("another 10000, currently: " + str(a))
-
         while conflict:
             g_id = random.choice(g_list)
             lease_date = fake.date_between(start_date=start_date, end_date=end_date)
@@ -227,9 +225,6 @@ def gen_services(ids: list, idx: int, n: int, g_list: list, start_date, end_date
         g_id = None
         conflict = True
         service_date, planned_date, return_date = None, None, None
-
-        if a % 10000 == 0:
-            print("another 10000, currently: " + str(a))
 
         while conflict:
             g_id = random.choice(g_list)
@@ -317,7 +312,8 @@ def add_old_gear(new_gear, old_gear, new_gear_excel, old_gear_excel, ng_ids, og_
     return new_gear, new_gear_excel
 
 
-def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sample_size, g_sample_size):
+def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sample_size, g_sample_size, suffix1,
+                   suffix2):
     gc_t1, gg_t1, gc_t2, gg_t2, ski_ids = [], [], [], [], []
     c_count2_diff = c_count2 - c_sample_size
     g_count2_diff = g_count2 - g_sample_size
@@ -359,12 +355,12 @@ def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sampl
             print("Some clients and gear moved from T1 to T2")
             print("Gear excel t1 moved to gear excel t2")
 
-    export_clients(clients_t1, 'T1')
-    export_clients(clients_t2, 'T2')
-    export_centers(ski_centers, 'T1')
-    export_centers(ski_centers, 'T2')
-    export_gear(gear_t1, gear_excel_t1, 'T1')
-    export_gear(gear_t2, gear_excel_t2, 'T2')
+    export_clients(clients_t1, suffix1)
+    export_clients(clients_t2, suffix2)
+    export_centers(ski_centers, suffix1)
+    export_centers(ski_centers, suffix2)
+    export_gear(gear_t1, gear_excel_t1, suffix1)
+    export_gear(gear_t2, gear_excel_t2, suffix2)
     print("dimension exports done")
     return gc_t1, gg_t1, gc_t2, gg_t2
 
@@ -372,7 +368,7 @@ def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sampl
 def gen_time_periods(start_date, count, span):
     periods = [[start_date, start_date + datetime.timedelta(days=span)]]
 
-    for i in range(count):
+    for i in range(count - 1):
         next_start = periods[i][1] + datetime.timedelta(days=1)
         next_end = next_start + datetime.timedelta(days=span)
         periods.append([next_start, next_end])
@@ -382,24 +378,32 @@ def gen_time_periods(start_date, count, span):
 
 def parallel_facts_gen(l_ids, s_ids, start_idx, c_per_p, gear, clients, period, dicts, idx_list, suffix):
     with ProcessPoolExecutor() as executor:
-        l_results = list(
-            executor.map(lambda x: gen_leased_gear(l_ids, c_per_p * x + start_idx, c_per_p, gear, clients,
-                                                   period[x][0], period[x][1], dicts[x], dicts[x + 1],
-                                                   dicts[x + 2]
-                                                   ),
-                         idx_list
-                         ))
+        p_list = []
 
-        s_results = list(
-            executor.map(lambda x: gen_services(s_ids, c_per_p * x + start_idx, c_per_p, gear,
-                                                period[x][0], period[x][1], dicts[x], dicts[x + 1],
-                                                dicts[x + 2]
-                                                ),
-                         idx_list
-                         ))
+        for x in idx_list:
+            p_list.append(executor.submit(gen_leased_gear, l_ids, c_per_p * x + start_idx, c_per_p, gear, clients,
+                                          period[x][0], period[x][1], dicts[x], dicts[x + 1], dicts[x + 2]))
+        for p in p_list:
+            save_leased_gear(p.result(), suffix)
 
-        save_leased_gear(l_results, suffix)
-        save_service(s_results, suffix)
+        p_list.clear()
+        for x in idx_list:
+            p_list.append(executor.submit(gen_services, s_ids, c_per_p * x + start_idx, c_per_p, gear, period[x][0],
+                                          period[x][1], dicts[x], dicts[x + 1], dicts[x + 2]))
+        for p in p_list:
+            save_service(p.result(), suffix)
+
+
+def gen_period_facts(fact1_ids, fact2_ids, start_idx, c_per_p, gear, clients, period,
+                     dicts, period_count, suffix):
+    even_idx = [i for i in range(period_count) if i % 2 == 0]
+    odd_idx = [i for i in range(period_count) if i % 2 != 0]
+
+    parallel_facts_gen(fact1_ids, fact2_ids, start_idx, c_per_p, gear, clients, period, dicts, even_idx, suffix)
+    print(suffix + " around half finished")
+
+    parallel_facts_gen(fact1_ids, fact2_ids, start_idx, c_per_p, gear, clients, period, dicts, odd_idx, suffix)
+    print(suffix + " finished")
 
 
 def gen_fact_ids(ids, count):
@@ -408,17 +412,13 @@ def gen_fact_ids(ids, count):
     ids.extend(tmp)
 
 
-def gen_facts(period1: list, period2: list, c_per_p1: int, c_per_p2: int,
+def gen_facts(period1: list, period2: list, fact_count1: int, fact_count2: int,
               gear_t1, gear_t2, clients_t1, clients_t2):
 
     period1_count = len(period1)
     period2_count = len(period2)
-    fact_count1 = c_per_p1 * period1_count
-    fact_count2 = c_per_p2 * period2_count
-    even_idx = [i for i in range(period1_count) if i % 2 == 0]
-    odd_idx = [i for i in range(period1_count) if i % 2 != 0]
-    even_idx2 = [i for i in range(period2_count) if i % 2 == 0]
-    odd_idx2 = [i for i in range(period2_count) if i % 2 != 0]
+    c_per_p1 = fact_count1 // period1_count
+    c_per_p2 = fact_count2 // period2_count
 
     with Manager() as manager:
         dicts = [manager.dict() for _ in range(period1_count + 2)]
@@ -432,74 +432,29 @@ def gen_facts(period1: list, period2: list, c_per_p1: int, c_per_p2: int,
             future1.result()
             future2.result()
             print("Fact id generated")
-            l_results, s_results = [], []
 
-            for x in even_idx:
-                l_results.append(executor.submit(gen_leased_gear, l_ids, c_per_p1 * x, c_per_p1, gear_t1, clients_t1,
-                                                 period1[x][0], period1[x][1], dicts[x],
-                                                 dicts[x + 1], dicts[x + 2]))
-            for result in l_results:
-                save_leased_gear(result.result(), 'T1')
-            for x in even_idx:
-                s_results.append(executor.submit(gen_services, s_ids, c_per_p1 * x, c_per_p1, gear_t1, period1[x][0],
-                                                 period1[x][1], dicts[x], dicts[x + 1], dicts[x + 2]))
-            for result in s_results:
-                save_service(result.result(), 'T1')
-            l_results, s_results = [], []
-            print("T1 around half finished")
+        gen_period_facts(l_ids, s_ids, 0, c_per_p1, gear_t1, clients_t1, period1, dicts, period1_count,  config.suffix1)
+        dicts2[0] = dicts[period1_count - 2]
 
-            for x in odd_idx:
-                l_results.append(executor.submit(gen_leased_gear, l_ids, c_per_p1 * x, c_per_p1, gear_t1, clients_t1,
-                                                 period1[x][0], period1[x][1], dicts[x],
-                                                 dicts[x + 1], dicts[x + 2]))
-            for result in l_results:
-                save_leased_gear(result.result(), 'T1')
-            for x in odd_idx:
-                s_results.append(executor.submit(gen_services, s_ids, c_per_p1 * x, c_per_p1, gear_t1, period1[x][0],
-                                                 period1[x][1], dicts[x], dicts[x + 1], dicts[x + 2]))
-            for result in s_results:
-                save_service(result.result(), 'T1')
-            l_results, s_results = [], []
-            print("T1 finished")
-
-            for x in even_idx2:
-                l_results.append(executor.submit(gen_leased_gear, l_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
-                                                 clients_t2, period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1],
-                                                 dicts2[x + 2]))
-            for result in l_results:
-                save_leased_gear(result.result(), 'T2')
-            for x in even_idx2:
-                s_results.append(executor.submit(gen_services, s_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
-                                                 period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1], dicts2[x + 2]))
-            for result in s_results:
-                save_service(result.result(), 'T2')
-            l_results, s_results = [], []
-            print("T2 around half finished")
-
-            for x in odd_idx2:
-                l_results.append(executor.submit(gen_leased_gear, l_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
-                                                 clients_t2, period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1],
-                                                 dicts2[x + 2]))
-            for result in l_results:
-                save_leased_gear(result.result(), 'T2')
-            for x in odd_idx2:
-                s_results.append(executor.submit(gen_services, s_ids, c_per_p2 * x + fact_count1, c_per_p2, gear_t2,
-                                                 period2[x][0], period2[x][1], dicts2[x], dicts2[x + 1], dicts2[x + 2]))
-            for result in s_results:
-                save_service(result.result(), 'T2')
-            print("T2 finished")
+        gen_period_facts(l_ids, s_ids, fact_count1, c_per_p2, gear_t2, clients_t2, period2, dicts2, period2_count,
+                         config.suffix2)
 
 
 if __name__ == '__main__':
-    export_leased_gear([], 'T1')
-    export_services([], 'T1')
-    export_leased_gear([], 'T2')
-    export_services([], 'T2')
+    export_leased_gear([], config.suffix1)
+    export_services([], config.suffix1)
+    export_leased_gear([], config.suffix2)
+    export_services([], config.suffix2)
 
-    time_periods = gen_time_periods(datetime.datetime(2023, 1, 1), 9, 30)
-    init_date2 = time_periods[9][1] + datetime.timedelta(days=1)
-    time_periods2 = gen_time_periods(init_date2, 1, 30)
+    time_periods = gen_time_periods(datetime.datetime(config.start_year, config.start_month, config.start_day),
+                                    config.periods1, config.span1)
 
-    c_t1, g_t1, c_t2, g_t2 = gen_dimensions(50000, 5000, 100000, 10000, 1000, 2000, 5000)
+    init_date2 = time_periods[config.periods1 - 1][1] + datetime.timedelta(days=1)
 
-    gen_facts(time_periods, time_periods2, 100000, 10000, g_t1, g_t2, c_t1, c_t2)
+    time_periods2 = gen_time_periods(init_date2, config.periods2, config.span2)
+
+    c_t1, g_t1, c_t2, g_t2 = gen_dimensions(config.c_count1, config.c_count2, config.g_count1, config.g_count2,
+                                            config.center_count, config.c_sample_size, config.g_sample_size,
+                                            config.suffix1, config.suffix2)
+
+    gen_facts(time_periods, time_periods2, config.f_count1, config.f_count2, g_t1, g_t2, c_t1, c_t2)
