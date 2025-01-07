@@ -145,8 +145,8 @@ def gen_clients(uids: list, idx: int, ids: list, n: int) -> [Client]:
 def gen_ski_centers(ids: list, n: int) -> [SkiCenter]:
     fake = faker.Faker("pl_PL")
     centers = []
-    for _ in range(n):
-        centers.append(SkiCenter(gen_uniq_id(ids), fake.company()))
+    for i in range(n):
+        centers.append(SkiCenter(ids[i], fake.company()))
     return centers
 
 
@@ -159,7 +159,7 @@ def gen_random_idx(idx_list: [int], count: int) -> int:
         return random.randint(0, count)
 
 
-def gen_gear(uids: list, idx: int, centers: [SkiCenter], ids: list, n: int):
+def gen_gear(uids: list, idx: int, centers: list, ids: list, n: int):
     fake = faker.Faker("pl_PL")
     gear_list, gear_ex_list = [], []
     center_count = len(centers)
@@ -170,8 +170,8 @@ def gen_gear(uids: list, idx: int, centers: [SkiCenter], ids: list, n: int):
         ids.append(uids[idx + i])
         gear_type = rand_g_type()
 
-        gear_list.append(Gear(uids[idx + i], centers[ski_idx].id, gear_type))
-        gear_ex_list.append(GearExcel(uids[idx + i], centers[ski_idx].id, gear_type, rand_prod(), fake.vin(),
+        gear_list.append(Gear(uids[idx + i], centers[ski_idx], gear_type))
+        gear_ex_list.append(GearExcel(uids[idx + i], centers[ski_idx], gear_type, rand_prod(), fake.vin(),
                                       rand_size(gear_type)))
     return gear_list, gear_ex_list
 
@@ -317,6 +317,7 @@ def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sampl
     gc_t1, gg_t1, gc_t2, gg_t2, ski_ids = [], [], [], [], []
     c_count2_diff = c_count2 - c_sample_size
     g_count2_diff = g_count2 - g_sample_size
+    gen_fact_ids(ski_ids, center_count)
     ski_centers = gen_ski_centers(ski_ids, center_count)
     print("centers t1 generated")
     with Manager() as manager:
@@ -325,15 +326,14 @@ def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sampl
         with ProcessPoolExecutor() as executor:
             p1 = executor.submit(gen_fact_ids, g_ids, g_count1 + g_count2)
             p2 = executor.submit(gen_fact_ids, c_ids, c_count1 + c_count2)
-
             p1.result()
             p2.result()
             print("Dimension ids generated")
 
             p1 = executor.submit(gen_clients, c_ids, 0, mc_t1, c_count1)
             p2 = executor.submit(gen_clients, c_ids, c_count1, mc_t2, c_count2_diff)
-            p3 = executor.submit(gen_gear, g_ids, 0, ski_centers, mg_t1, g_count1)
-            p4 = executor.submit(gen_gear, g_ids, g_count1, ski_centers, mg_t2, g_count2_diff)
+            p3 = executor.submit(gen_gear, g_ids, 0, ski_ids, mg_t1, g_count1)
+            p4 = executor.submit(gen_gear, g_ids, g_count1, ski_ids, mg_t2, g_count2_diff)
 
             clients_t1 = p1.result()
             clients_t2 = p2.result()
