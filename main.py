@@ -22,6 +22,7 @@ class Gear:
         self.g_type = gear_type
 
 
+# Extended gear class containing more information on specific piece of gear
 class GearExcel(Gear):
     def __init__(self, g_id, center_id, g_type, producer, model, size):
         Gear.__init__(self, g_id, center_id, g_type)
@@ -30,6 +31,7 @@ class GearExcel(Gear):
         self.size = size
 
 
+# Class describing gear service event
 class Service:
     def __init__(self, s_id, gear_id, service_date, planned_date, return_date):
         self.id = s_id
@@ -39,6 +41,7 @@ class Service:
         self.return_date = return_date
 
 
+# Class describing a gear lease event
 class LeasedGear:
     def __init__(self, l_id, gear_id, client_id, lease_date, planned_date, return_date):
         self.id = l_id
@@ -57,10 +60,12 @@ class Client:
         self.phone_number = phone_number
 
 
+# Helper function for randomly generating gear type
 def rand_g_type():
     return random.choice(["snowboard", "narty", "kijki", "kask"])
 
 
+# Helper function for randomly generating manufacturer
 def rand_prod():
     return random.choice([
         "Alpine", "Summit", "Polar", "Glacier", "Snow", "Ice", "Mountain", "Frost",
@@ -70,6 +75,7 @@ def rand_prod():
     ])
 
 
+# Helper function for randomly generating gear size according to its type
 def rand_size(g_type: str):
     if g_type == "snowboard":
         return random.randint(50, 100)
@@ -81,6 +87,7 @@ def rand_size(g_type: str):
         return random.randint(10, 30)
 
 
+# Helper function for randomly generating gear price according to its type
 def rand_price(g_type: str):
     if g_type == "snowboard":
         return random.randint(100, 200)
@@ -92,6 +99,7 @@ def rand_price(g_type: str):
         return random.randint(20, 50)
 
 
+# Helper function to simplify saving lists of data to new csv file
 def export_to_csv(file_name, header, data):
     with open(file_name, mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -99,18 +107,21 @@ def export_to_csv(file_name, header, data):
         writer.writerows(data)
 
 
+# Helper function for adding data to existing csv file
 def save_to_csv(file_name, data):
     with open(file_name, mode='a', newline='') as file:
         writer = csv.writer(file)
         writer.writerows(data)
 
 
+# Helper method for generating ids
 def gen_id(length):
     characters = string.digits + string.ascii_uppercase
 
     return ''.join(random.choices(characters, k=length))
 
 
+# Helper method for generating unique ids
 def gen_uniq_id(ids: list):
     u_id = None
 
@@ -121,6 +132,7 @@ def gen_uniq_id(ids: list):
     return u_id
 
 
+# Helper function designed to detect date conflicts with existing facts
 def check_for_date_conflict(start_date, end_date, gear_id, g_dict) -> bool:
     if gear_id in g_dict:
         for dates in g_dict[gear_id]:
@@ -132,6 +144,7 @@ def check_for_date_conflict(start_date, end_date, gear_id, g_dict) -> bool:
     return False
 
 
+# Function for generating set of clients
 def gen_clients(uids: list, idx: int, ids: list, n: int) -> [Client]:
     fake = faker.Faker("pl_PL")
     client_list = []
@@ -142,6 +155,7 @@ def gen_clients(uids: list, idx: int, ids: list, n: int) -> [Client]:
     return client_list
 
 
+# Function for generating set of ski centers
 def gen_ski_centers(ids: list, n: int) -> [SkiCenter]:
     fake = faker.Faker("pl_PL")
     centers = []
@@ -150,6 +164,7 @@ def gen_ski_centers(ids: list, n: int) -> [SkiCenter]:
     return centers
 
 
+# Function used to get a unique id or gen set of ids
 def gen_random_idx(idx_list: [int], count: int) -> int:
     if len(idx_list) > 0:
         tmp = random.choice(idx_list)
@@ -159,6 +174,7 @@ def gen_random_idx(idx_list: [int], count: int) -> int:
         return random.randint(0, count)
 
 
+# Function for generating 2 sets of gear lists one basic and one with a lot of details
 def gen_gear(uids: list, idx: int, centers: list, ids: list, n: int):
     fake = faker.Faker("pl_PL")
     gear_list, gear_ex_list = [], []
@@ -176,17 +192,20 @@ def gen_gear(uids: list, idx: int, centers: list, ids: list, n: int):
     return gear_list, gear_ex_list
 
 
+# Helper function sued for periodically saving sets of leased gear event facts to existing csv file
 def save_leased_gear(l_list: [LeasedGear], suffix: str):
     save_to_csv('leasedGear' + suffix + '.csv',
                 [[g.id, g.gear_id, g.client_id, g.lease_date, g.planned_date, g.return_date] for g in l_list])
 
 
+# Helper function sued for periodically saving sets of gear service event facts to existing csv file
 def save_service(service_list: [Service], suffix: str):
     save_to_csv('service' + suffix + '.csv',
                 [[service.id, service.gear_id, service.start_date, service.planned_date, service.return_date]
                  for service in service_list])
 
 
+# Function for generating set of leased gear event facts, with ensuring that fact dates do not collide
 def gen_leased_gear(ids: list, idx: int, n: int, g_list: list, c_list: list,
                     start_date, end_date, p_dict, g_dict, n_dict):
     lease_list = []
@@ -218,6 +237,7 @@ def gen_leased_gear(ids: list, idx: int, n: int, g_list: list, c_list: list,
     return lease_list
 
 
+# Function for generating set of gear service event facts, with ensuring that fact dates do not collide
 def gen_services(ids: list, idx: int, n: int, g_list: list, start_date, end_date, p_dict, g_dict, n_dict):
     service_list = []
     fake = faker.Faker("pl_PL")
@@ -247,17 +267,20 @@ def gen_services(ids: list, idx: int, n: int, g_list: list, start_date, end_date
     return service_list
 
 
+# Helper function for exporting a whole list of gear service facts to csv file
 def export_services(service_list: [Service], suffix: str):
     export_to_csv('service' + suffix + '.csv', ['id', 'gear_id', 'service_date', 'planned_date', 'return_date'],
                   [[service.id, service.gear_id, service.start_date, service.planned_date, service.return_date]
                    for service in service_list])
 
 
+# Helper function for exporting a whole list of clients to csv file
 def export_clients(client_list: [Client], suffix: str):
     export_to_csv('clients' + suffix + '.csv', ['id', 'name', 'last_name', 'phone_number'],
                   [[client.id, client.name, client.last_name, client.phone_number] for client in client_list])
 
 
+# Helper function for exporting lists of gear to their respective csv files
 def export_gear(g_list: [Gear], g_ex_list: [GearExcel], suffix: str):
     export_to_csv('gear' + suffix + '.csv', ['id', 'center_id'], [[g.id, g.center_id] for g in g_list])
 
@@ -265,17 +288,19 @@ def export_gear(g_list: [Gear], g_ex_list: [GearExcel], suffix: str):
                   [[g.id, g.center_id, g.g_type, g.producer, g.model, g.size] for g in g_ex_list])
 
 
+# Helper function for exporting a whole list of ski centers to csv file
 def export_centers(center_list: [SkiCenter], suffix: str):
     export_to_csv('ski_center' + suffix + '.csv', ['id', 'name'],
                   [[ski_center.id, ski_center.name] for ski_center in center_list])
 
 
+# Helper function for exporting a whole list of gear lease event facts to csv file
 def export_leased_gear(l_list: [LeasedGear], suffix: str):
     export_to_csv('leasedGear' + suffix + '.csv',
                   ['id', 'gear_id', 'client_id', 'lease_date', 'planned_date', 'return_date'],
                   [[g.id, g.gear_id, g.client_id, g.lease_date, g.planned_date, g.return_date] for g in l_list])
 
-
+# Helper function used for extracting set of unique elements from given src list
 def get_unique_sample(src: list, result: list, ids: list, sample_size: int):
     chosen_samples = []
     for _ in range(sample_size):
@@ -290,11 +315,13 @@ def get_unique_sample(src: list, result: list, ids: list, sample_size: int):
     return chosen_samples
 
 
+# Helper function for generating set of unique ids of given size
 def gen_id_set(ids: list, count: int):
     for _ in range(count):
         gen_uniq_id(ids)
 
 
+# Function used for modification of portion of clients from first set of data and integrating them into the new set
 def modify_and_add_clients(new_clients, old_clients):
     fake = faker.Faker("pl_PL")
     for c in old_clients:
@@ -303,6 +330,7 @@ def modify_and_add_clients(new_clients, old_clients):
     return new_clients + old_clients
 
 
+# function used for integrating portion of gear form the first set into the new set
 def add_old_gear(new_gear, old_gear, new_gear_excel, old_gear_excel, ng_ids, og_ids, count):
     for i in range(count):
         if og_ids[i] in ng_ids:
@@ -312,6 +340,7 @@ def add_old_gear(new_gear, old_gear, new_gear_excel, old_gear_excel, ng_ids, og_
     return new_gear, new_gear_excel
 
 
+# Function used for generating data for the dimension tables and saving them to their respective csv files
 def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sample_size, g_sample_size, suffix1,
                    suffix2):
     gc_t1, gg_t1, gc_t2, gg_t2, ski_ids = [], [], [], [], []
@@ -365,6 +394,7 @@ def gen_dimensions(c_count1, c_count2, g_count1, g_count2, center_count, c_sampl
     return gc_t1, gg_t1, gc_t2, gg_t2
 
 
+# Helper function used for generating date periods with specific span in which generated events "happened"
 def gen_time_periods(start_date, count, span):
     periods = [[start_date, start_date + datetime.timedelta(days=span)]]
 
@@ -376,6 +406,7 @@ def gen_time_periods(start_date, count, span):
     return periods
 
 
+# Function which handles parallel fact generation via multiprocessing
 def parallel_facts_gen(l_ids, s_ids, start_idx, c_per_p, gear, clients, period, dicts, idx_list, suffix):
     with ProcessPoolExecutor() as executor:
         p_list = []
@@ -394,6 +425,7 @@ def parallel_facts_gen(l_ids, s_ids, start_idx, c_per_p, gear, clients, period, 
             save_service(p.result(), suffix)
 
 
+# Function that divides time periods into between sets to allow quick multiprocess execution
 def gen_period_facts(fact1_ids, fact2_ids, start_idx, c_per_p, gear, clients, period,
                      dicts, period_count, suffix):
     even_idx = [i for i in range(period_count) if i % 2 == 0]
@@ -406,12 +438,14 @@ def gen_period_facts(fact1_ids, fact2_ids, start_idx, c_per_p, gear, clients, pe
     print(suffix + " finished")
 
 
+# Helper function for generating ids for fact records
 def gen_fact_ids(ids, count):
     tmp = list(range(1, count + 1))
     random.shuffle(tmp)
     ids.extend(tmp)
 
 
+# Function which handles generating records for fact tables
 def gen_facts(period1: list, period2: list, fact_count1: int, fact_count2: int,
               gear_t1, gear_t2, clients_t1, clients_t2):
 
